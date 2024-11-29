@@ -31,7 +31,7 @@ type term =
 
 (* Simple SMT-LIB syntax, in Coq *)
 let gc prefix constant =
-  lazy (UnivGen.constr_of_monomorphic_global (Coqlib.lib_ref (prefix ^ "." ^ constant)))
+  lazy (UnivGen.constr_of_monomorphic_global (Global.env ()) (Coqlib.lib_ref (prefix ^ "." ^ constant)))
 let smtcoq_api_prefix = "SMTCoqAPI.SMTLib"
 let smtcoq_api_gc = gc smtcoq_api_prefix
 let cSort_Bool = smtcoq_api_gc "Sort_Bool"
@@ -49,10 +49,12 @@ let rec reify_list l =
   let c, args = Constr.decompose_app l in
   if c = Lazy.force S.CoqTerms.cnil then
     []
-  else
-    match args with
-      | [_; x; xs] -> x::(reify_list xs)
-      | _ -> assert false
+  else (
+    assert (Array.length args = 3);
+    let x = args.(1) in
+    let xs = args.(2) in
+    x::(reify_list xs)
+  )
 
 let reify_sort (c:Constr.t) =
   let c, args = Constr.decompose_app c in
@@ -60,51 +62,53 @@ let reify_sort (c:Constr.t) =
     Sort_Bool
   else if c = Lazy.force cSort_Int then
     Sort_Int
-  else if c = Lazy.force cSort_Uninterpreted then
-    match args with
-      | [num] -> Sort_Uninterpreted num
-      | _ -> assert false
-  else
+  else if c = Lazy.force cSort_Uninterpreted then (
+    assert (Array.length args = 1);
+    let num = args.(0) in
+    Sort_Uninterpreted num
+  ) else
     assert false
 
 let reify_sym (sym:Constr.t) : fun_sym =
   let _, args = Constr.decompose_app sym in
-  match args with
-    | [_; _; sym; sign] ->
-       (let _, sign = Constr.decompose_app sign in
-        match sign with
-          | [_; _; dom; codom] ->
-             let dom = reify_list dom in
-             (sym, (List.map reify_sort dom, reify_sort codom))
-          | _ -> assert false
-       )
-    | _ -> assert false
+  assert (Array.length args = 4);
+  let sym = args.(2) in
+  let sign = args.(3) in
+  let _, sign = Constr.decompose_app sign in
+  assert (Array.length sign = 4);
+  let dom = sign.(2) in
+  let codom = sign.(3) in
+  let dom = reify_list dom in
+  (sym, (List.map reify_sort dom, reify_sort codom))
 
 let rec reify (c:Constr.t) =
   let c, args = Constr.decompose_app c in
   if c = Lazy.force cTerm_Fun then (
-    match args with
-      | [sym; args] ->
-         let sym = reify_sym sym in
-         let args = reify_list args in
-         Term_Fun (sym, List.map reify args)
-      | _ -> assert false
+    assert (Array.length args = 2);
+    let sym = args.(0) in
+    let args = args.(1) in
+    let sym = reify_sym sym in
+    let args = reify_list args in
+    Term_Fun (sym, List.map reify args)
   ) else if c = Lazy.force cTerm_Int then (
-    match args with
-      | [z] -> Term_Int z
-      | _ -> assert false
+    assert (Array.length args = 1);
+    let z = args.(0) in
+    Term_Int z
   ) else if c = Lazy.force cTerm_Geq then (
-    match args with
-      | [t1; t2] -> Term_Geq (reify t1, reify t2)
-      | _ -> assert false
+    assert (Array.length args = 2);
+    let t1 = args.(0) in
+    let t2 = args.(1) in
+    Term_Geq (reify t1, reify t2)
   ) else if c = Lazy.force cTerm_Eq then (
-    match args with
-      | [t1; t2] -> Term_Eq (reify t1, reify t2)
-      | _ -> assert false
+    assert (Array.length args = 2);
+    let t1 = args.(0) in
+    let t2 = args.(1) in
+    Term_Eq (reify t1, reify t2)
   ) else if c = Lazy.force cTerm_And then (
-    match args with
-      | [t1; t2] -> Term_And (reify t1, reify t2)
-      | _ -> assert false
+    assert (Array.length args = 2);
+    let t1 = args.(0) in
+    let t2 = args.(1) in
+    Term_And (reify t1, reify t2)
   ) else assert false
 
 
@@ -122,15 +126,13 @@ let rec compile_positive ra (c:Constr.t) =
   if c = Lazy.force S.CoqTerms.cxH then (
     S.SmtAtom.Atom.get ra (S.SmtAtom.Acop S.SmtAtom.CO_xH)
   ) else if c = Lazy.force S.CoqTerms.cxO then (
-    match args with
-      | [arg] ->
-         S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_xO, compile_positive ra arg))
-      | _ -> assert false
+    assert (Array.length args = 1);
+    let arg = args.(0) in
+    S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_xO, compile_positive ra arg))
   ) else if c = Lazy.force S.CoqTerms.cxI then (
-    match args with
-      | [arg] ->
-         S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_xI, compile_positive ra arg))
-      | _ -> assert false
+    assert (Array.length args = 1);
+    let arg = args.(0) in
+    S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_xI, compile_positive ra arg))
   ) else assert false
 
 
@@ -139,15 +141,13 @@ let compile_Z ra (c:Constr.t) =
   if c = Lazy.force S.CoqTerms.cZ0 then (
     S.SmtAtom.Atom.get ra (S.SmtAtom.Acop S.SmtAtom.CO_Z0)
   ) else if c = Lazy.force S.CoqTerms.cZpos then (
-    match args with
-      | [arg] ->
-         S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_Zpos, compile_positive ra arg))
-      | _ -> assert false
+    assert (Array.length args = 1);
+    let arg = args.(0) in
+    S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_Zpos, compile_positive ra arg))
   ) else if c = Lazy.force S.CoqTerms.cZneg then (
-    match args with
-      | [arg] ->
-         S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_Zneg, compile_positive ra arg))
-      | _ -> assert false
+    assert (Array.length args = 1);
+    let arg = args.(0) in
+    S.SmtAtom.Atom.get ra (S.SmtAtom.Auop (S.SmtAtom.UO_Zneg, compile_positive ra arg))
   ) else assert false
 
 

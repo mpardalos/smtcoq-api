@@ -1,1 +1,2 @@
 COQ_SRC_SUBDIRS+=user-contrib/SMTCoq
+CAMLPKGS += -package coq-smtcoq.smtcoq

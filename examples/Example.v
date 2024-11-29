@@ -2,7 +2,6 @@ Require Import ZArith.
 
 
 (* Import the SMTCoq-API Library *)
-Add Rec LoadPath "../src" as SMTCoqApi.
 Require Import SMTCoqApi.
 
 
