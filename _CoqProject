@@ -1,3 +1,5 @@
+src/META.coq-smtcoq-api
+
 -R theories SMTCoqApi
 -I src
 

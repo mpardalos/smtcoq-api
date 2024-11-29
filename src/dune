@@ -2,6 +2,6 @@
  (name smtcoq_api_plugin)
  (public_name coq.plugins.smtcoq_api)
  (flags :standard -warn-error -3)
- (libraries coq.plugins.ltac))
+ (libraries coq-core.plugins.ltac coq-smtcoq.smtcoq))
 
 (coq.pp (modules g_api))

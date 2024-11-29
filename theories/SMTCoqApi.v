@@ -12,4 +12,4 @@
 
 Require Export SMTCoq.SMTCoq SMTLib.
 
-Declare ML Module "smtcoq_api_plugin".
+Declare ML Module "coq-smtcoq-api.smtcoq-api".

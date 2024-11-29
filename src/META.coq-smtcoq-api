@@ -1,0 +1,11 @@
+package "smtcoq-api" (
+  directory = "."
+  version = "dev+8.19"
+  description = "A Coq plugin to simply use SMTCoq"
+  requires = "coq-core.plugins.ltac coq-smtcoq.smtcoq"
+  archive(byte) = "smtcoq_api_plugin.cma"
+  archive(native) = "smtcoq_api_plugin.cmxa"
+  plugin(byte) = "smtcoq_api_plugin.cma"
+  plugin(native) = "smtcoq_api_plugin.cmxs"
+)
+directory = "."
