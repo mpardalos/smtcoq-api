@@ -70,7 +70,7 @@ Section SMTLib.
       forall n, nat_cast n n = idcast.
     Proof. induction n as [ |n IHn]; simpl; try rewrite IHn; auto. Qed.
 
-    Fixpoint cast (A B:sort) : cast_result sort A B :=
+    Definition cast (A B:sort) : cast_result sort A B :=
       match A, B return cast_result sort A B with
       | Sort_Bool, Sort_Bool => idcast
       | Sort_Int, Sort_Int => idcast
