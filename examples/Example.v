@@ -143,3 +143,33 @@ Definition interp_fun (interp_var:nat -> Z) (n:nat) (dom:list sort) (codom:sort)
 Definition ExpZ2SMTLIB_correctness := forall (e : ExpZ bool),
   (exists (interp_var:var -> Z), interp_ExpZ interp_var e = true) <->
   (exists (interp_var:var -> Z), interp_formula interp_sort_sym_dummy (interp_fun interp_var) (ExpZ2SMTLIB e) = true).
+
+(* (* And let's prove it *) *)
+(* Require Import JMeq. *)
+
+(* Lemma ExpZ2SMTLIB_correct_ind {A:Type} (e:ExpZ A) (interp_var:var -> Z) : *)
+(*   match interp_term interp_sort_sym_def (interp_fun interp_var) (ExpZ2SMTLIB e) with *)
+(*   | Some (existT _ X x) => JMeq (interp_ExpZ interp_var e) x *)
+(*   | None => False *)
+(*   end. *)
+(* Admitted. *)
+(* (* Proof. *) *)
+(* (*   induction e as [v|z|z1 IHz1 z2 IHz2|b1 IHb1 b2 IHb2]. *) *)
+(* (* Qed. *) *)
+
+
+(* Theorem ExpZ2SMTLIB_correct : ExpZ2SMTLIB_correctness. *)
+(* Proof. *)
+(*   unfold ExpZ2SMTLIB_correctness. *)
+(*   intro e; split; intros [iv H]; exists iv; generalize (ExpZ2SMTLIB_correct_ind e iv); *)
+(*     case_eq (interp_term interp_sort_sym_def (interp_fun iv) (ExpZ2SMTLIB e)); *)
+(*     [ |now intros _ []| |now intros _ []]; intros [X x] Hx Heq. *)
+(*   - unfold interp_formula. rewrite Hx. *)
+(*     destruct X; auto. *)
+(*     inversion Heq as [H1 H2]. rewrite H in H2. now rewrite (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H2). *)
+(*   - unfold interp_formula in H. rewrite Hx in H. *)
+(*     destruct X. *)
+(*     + inversion Heq as [H1 H2]. rewrite H in H2. now rewrite (Eqdep.EqdepTheory.inj_pair2 _ _ _ _ _ H2). *)
+(*     + inversion Heq as [H1 H2]. admit. *)
+(*     + inversion Heq as [H1 H2]. unfold interp_sort_sym_def in H1. admit. *)
+(* Admitted. *)
