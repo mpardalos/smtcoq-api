@@ -173,6 +173,26 @@ Section SMTLib.
 
   End Interpretation.
 
+  (* Default values for interpreted sorts *)
+  Section Default.
+    Variable interp_sort_sym : sort_sym -> Type.
+    Variable interp_sort_sym_def : forall (sy:sort_sym), interp_sort_sym sy.
+
+    Definition interp_sort_def (s:sort) : interp_sort interp_sort_sym s :=
+      match s return interp_sort interp_sort_sym s with
+      | Sort_Bool => true
+      | Sort_Int => 0%Z
+      | Sort_Uninterpreted sy => interp_sort_sym_def sy
+      end.
+
+    Fixpoint interp_fun_type_def (dom:list sort) (codom:sort) :
+      interp_fun_type interp_sort_sym dom codom :=
+      match dom return interp_fun_type interp_sort_sym dom codom with
+      | nil => interp_sort_def codom
+      | _::dom => fun _ => interp_fun_type_def dom codom
+      end.
+  End Default.
+
 End SMTLib.
 
 

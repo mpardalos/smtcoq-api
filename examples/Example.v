@@ -28,7 +28,7 @@ Fixpoint ExpZ2SMTLIB {A:Type} (e:ExpZ A) : term :=
   end.
 
 
-(* Now, take your expression *)
+(* Now, take an expression *)
 Definition exp1 := ExpZ_EqbZ (ExpZ_Var 0) (ExpZ_Z 233).
 
 (* You translate it and normalize the result *)
@@ -41,7 +41,7 @@ Print smt1.
 Generate_SMT smt1 "/tmp/ex1.smt2".
 
 
-(* We can proceed similarly for the second example *)
+(* We can proceed similarly with another example *)
 Definition exp2 := ExpZ_Andb (ExpZ_EqbZ (ExpZ_Var 0) (ExpZ_Z 233))
                             (ExpZ_EqbZ (ExpZ_Var 0) (ExpZ_Z 2333)).
 
@@ -99,3 +99,47 @@ Definition exp4 := Exp_Andb (Exp_EqbNat (Exp_Var 0) (Exp_Nat 233))
                             (Exp_EqbNat (Exp_Var 0) (Exp_Nat 2333)).
 Definition smt4 := Eval compute in (Exp2SMTLIB exp4).
 Generate_SMT smt4 "/tmp/ex4.smt2".
+
+
+(* You may want to relate satisfiability of formulas in your language
+with the one in SMTLib. To this end, SMTLib defines an interpretation
+function. You thus have to define an interpretation function for your
+language, and use both of them to show the correctness of the
+translation. *)
+
+(* Let's do it on the first example. First, you define an intepretation
+function for the language. *)
+Section Interp.
+  Variable interp_var : var -> Z.
+
+  Fixpoint interp_ExpZ {A:Type} (e:ExpZ A) : A :=
+    match e in ExpZ A return A with
+    | ExpZ_Var v => interp_var v
+    | ExpZ_Z z => z
+    | ExpZ_EqbZ z1 z2 => ((interp_ExpZ z1) =? (interp_ExpZ z2))%Z
+    | ExpZ_Andb b1 b2 => ((interp_ExpZ b1) && (interp_ExpZ b2))%bool
+    end.
+
+End Interp.
+
+(* Then, let's state the equisatisfiability *)
+
+(* We do not have uninterpreted sorts *)
+Definition interp_sort_sym_dummy : nat -> Type := fun _ => unit.
+Definition interp_sort_sym_dummy_def (n:nat) : interp_sort_sym_dummy n := tt.
+
+(* We do not have function symbols, only integer variables; so lets
+   extend an interpretation function for these variables
+     `interp_var:nat -> Z`
+  to the more complex interpretation function for SMTLib function
+  variables, by using default values. *)
+Definition interp_fun (interp_var:nat -> Z) (n:nat) (dom:list sort) (codom:sort) :
+  interp_fun_type interp_sort_sym_dummy dom codom :=
+  match dom, codom return interp_fun_type interp_sort_sym_dummy dom codom with
+  | nil, Sort_Int => interp_var n
+  | dom, codom => interp_fun_type_def _ interp_sort_sym_dummy_def dom codom
+  end.
+
+Definition ExpZ2SMTLIB_correctness := forall (e : ExpZ bool),
+  (exists (interp_var:var -> Z), interp_ExpZ interp_var e = true) <->
+  (exists (interp_var:var -> Z), interp_formula interp_sort_sym_dummy (interp_fun interp_var) (ExpZ2SMTLIB e) = true).
