@@ -29,7 +29,7 @@ Section SMTLib.
 
   (* Uninterpreted functions. Remarks:
      - predicate symbols are function symbols of codomain Bool
-     - variables are function symbols with arguments
+     - variables are function symbols without arguments
    *)
   Local Notation fun_sym := (nat * ((list sort) * sort))%type.
 
