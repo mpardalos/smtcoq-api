@@ -17,6 +17,8 @@ Require Import SMTCoq.bva.BVList.
 Import BITVECTOR_LIST.
 Require Import ZArith.
 
+Import ListNotations.
+
 
 (* A high-level, simple syntax for SMT-LIB *)
 (* TO BE EXTENDED *)
@@ -201,6 +203,7 @@ Section SMTLib.
                   end
       end.
 
+    (* TODO: This is probably wrong. *)
     Program Fixpoint bv2nat {m} (bv : bitvector m) {measure (nat_of_N m)} : nat :=
       match bits bv with
       | nil =>
@@ -216,6 +219,23 @@ Section SMTLib.
         unfold RAWBITVECTOR_LIST.size in *; simpl in *.
         inversion Heq_anonymous; subst.
         lia.
+    Qed.
+
+    (* TODO: This is probably wrong. *)
+    Program Fixpoint nat2bv (n : nat) {measure n} : {m : N & bitvector m} :=
+      match n with
+      | 0 => existT _ 0%N (of_bits [])
+      | _ =>
+          let 'existT _ m head := nat2bv (n / 2) in
+          (existT _ (m + 1)%N (bv_concat head (of_bits [n mod 2 =? 1])))
+      end
+    .
+    Next Obligation.
+      pose proof (Nat.divmod_spec n 1 0 1) as H.
+      specialize (H ltac:(lia)).
+      destruct (Nat.divmod n 1 0 1).
+      simpl in *.
+      lia.
     Qed.
 
     (* Interpretation of terms *)
