@@ -9,8 +9,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
+Require Import Lia.
+Require Coq.Program.Wf.
 
 Require Import SMTCoq.SMTCoq.
+Require Import SMTCoq.bva.BVList.
+Import BITVECTOR_LIST.
 Require Import ZArith.
 
 
@@ -24,6 +28,8 @@ Section SMTLib.
   Inductive sort : Set :=
   | Sort_Bool
   | Sort_Int
+  (* SMTLIB says m > 0, but SMTCoq uses N in src/bva/BVList.v *)
+  | Sort_BitVec (m : N)
   | Sort_Uninterpreted (_:sort_sym)
   .
 
@@ -33,14 +39,35 @@ Section SMTLib.
    *)
   Local Notation fun_sym := (nat * ((list sort) * sort))%type.
 
+  Variant BVUnaryOp : Set :=
+    | BVNot
+    | BVNeg
+  .
+
+  Variant BVBinOp : Set :=
+    | BVAnd
+    | BVOr
+    | BVAdd
+    | BVMul
+    | BVUDiv
+    | BVURem
+    | BVShl
+    | BVShr
+  .
+
   Inductive term : Set :=
   | Term_Fun : fun_sym -> list term -> term
   | Term_Int : Z -> term
   | Term_Geq : term -> term -> term
   | Term_Eq : term -> term -> term
   | Term_And : term -> term -> term
+  | Term_BVLit : list bool -> term
+  | Term_BVConcat : term -> term -> term
+  | Term_BVExtract : nat -> nat -> term -> term
+  | Term_BVUnaryOp : BVUnaryOp -> term -> term
+  | Term_BVBinOp : BVBinOp -> term -> term -> term
+  | Term_BVUlt : term -> term -> term
   .
-
 
   (* To be able to interpret function symbol application, we introduce
      an informative cast between sorts
@@ -70,10 +97,50 @@ Section SMTLib.
       forall n, nat_cast n n = idcast.
     Proof. induction n as [ |n IHn]; simpl; try rewrite IHn; auto. Qed.
 
+    Fixpoint pos_cast (n m: positive) : cast_result positive n m :=
+      match n, m with
+      | xH, xH => idcast
+      | xO n, xO m =>
+          match pos_cast n m with
+          | Some k => Some (fun P => k (fun x => P (xO x)))
+          | None => None
+          end
+      | xI n, xI m =>
+          match pos_cast n m with
+          | Some k => Some (fun P => k (fun x => P (xI x)))
+          | None => None
+          end
+      | _, _ => None
+      end.
+
+    Lemma pos_cast_refl:
+      forall n, pos_cast n n = idcast.
+    Proof. induction n; simpl; try rewrite IHn; auto. Qed.
+
+    Fixpoint N_cast (n m: N) : cast_result N n m :=
+      match n, m with
+      | N0, N0 => idcast
+      | Npos n, Npos m =>
+          match pos_cast n m with
+          | Some k => Some (fun P => k (fun x => P (Npos x)))
+          | None => None
+          end
+      | _, _ => None
+      end.
+
+    Lemma N_cast_refl:
+      forall n, N_cast n n = idcast.
+    Proof. induction n; simpl; try rewrite pos_cast_refl; try rewrite IHn; auto. Qed.
+
     Definition cast (A B:sort) : cast_result sort A B :=
       match A, B return cast_result sort A B with
       | Sort_Bool, Sort_Bool => idcast
       | Sort_Int, Sort_Int => idcast
+      | Sort_BitVec m1, Sort_BitVec m2 =>
+          match N_cast m1 m2 with
+          | Some k => Some (fun P => k (fun x => P (Sort_BitVec x)))
+          | None => None
+          end
       | Sort_Uninterpreted n1, Sort_Uninterpreted n2 =>
           match nat_cast n1 n2 with
           | Some k => Some (fun P => k (fun x => P (Sort_Uninterpreted x)))
@@ -84,10 +151,12 @@ Section SMTLib.
 
     Lemma cast_refl:
       forall s, cast s s = idcast.
-    Proof. destruct s as [ | |n]; simpl; auto. now rewrite nat_cast_refl. Qed.
-
+    Proof.
+      destruct s as [ | |m|n]; simpl; auto.
+      - now rewrite N_cast_refl.
+      - now rewrite nat_cast_refl.
+    Qed.
   End Cast.
-
 
   (* Interpretation *)
   Section Interpretation.
@@ -99,6 +168,7 @@ Section SMTLib.
       match s with
       | Sort_Bool => bool
       | Sort_Int => Z
+      | Sort_BitVec m => bitvector m
       | Sort_Uninterpreted sy => interp_sort_sym sy
       end.
 
@@ -130,6 +200,23 @@ Section SMTLib.
                   | _ => None
                   end
       end.
+
+    Program Fixpoint bv2nat {m} (bv : bitvector m) {measure (nat_of_N m)} : nat :=
+      match bits bv with
+      | nil =>
+          0
+      | (b :: bs) =>
+          (if b then 2 ^ (nat_of_N m) else 0) + bv2nat (of_bits bs)
+      end
+    .
+    Next Obligation.
+      destruct m.
+      - destruct bv0; destruct bv0; simpl in *; discriminate.
+      - destruct bv0; destruct bv0; simpl in *; try discriminate.
+        unfold RAWBITVECTOR_LIST.size in *; simpl in *.
+        inversion Heq_anonymous; subst.
+        lia.
+    Qed.
 
     (* Interpretation of terms *)
     Variable interp_fun_sym :
@@ -163,6 +250,67 @@ Section SMTLib.
               Some (existT _ Sort_Bool (b1 && b2)%bool)
           | _, _ => None
           end
+      | Term_BVLit bits =>
+          Some (existT _ (Sort_BitVec (N_of_nat (length bits))) (of_bits bits))
+      | Term_BVConcat t1 t2 =>
+          match interp_term t1, interp_term t2 with
+          | Some (existT _ (Sort_BitVec m1) bv1), Some (existT _ (Sort_BitVec m2) bv2) =>
+              Some (existT _ (Sort_BitVec (m1 + m2)) (bv_concat bv1 bv2))
+          | _, _ => None
+          end
+      | Term_BVExtract lo hi t =>
+          match interp_term t with
+          | Some (existT _ (Sort_BitVec m) bv) =>
+              Some (existT _
+                      (Sort_BitVec (N_of_nat (hi - lo + 1)))
+                      (bv_extr (N_of_nat lo) _ bv))
+          | _ => None
+          end
+      | Term_BVUnaryOp op t =>
+          match interp_term t with
+          | Some (existT _ (Sort_BitVec m) bv) =>
+              match op with
+              | BVNot => Some (existT _ (Sort_BitVec m) (bv_not bv))
+              | BVNeg => Some (existT _ (Sort_BitVec m) (bv_neg bv))
+              end
+          | _ => None
+          end
+      | Term_BVBinOp binop t1 t2 =>
+          match interp_term t1, interp_term t2 with
+          | Some (existT _ (Sort_BitVec m1) bv1),
+            Some (existT _ (Sort_BitVec m2) bv2_2) =>
+              match N.eq_dec m2 m1 with
+              | left e =>
+                  let bv2 : bitvector m1 := eq_rect m2 bitvector bv2_2 m1 e in
+                  match binop with
+                  | BVAnd => Some (existT _ (Sort_BitVec m1) (bv_and bv1 bv2))
+                  | BVOr => Some (existT _ (Sort_BitVec m1) (bv_or bv1 bv2))
+                  | BVAdd => Some (existT _ (Sort_BitVec m1) (bv_add bv1 bv2))
+                  | BVMul => Some (existT _ (Sort_BitVec m1) (bv_mult bv1 bv2))
+                  | BVUDiv =>
+                      (* Divide does not exist in SMTCoq bitvectors *)
+                      (* Some (existT _ (Sort_BitVec m1) (bv_udiv bv1 bv2)) *)
+                      None
+                  | BVURem =>
+                      (* Divide does not exist in SMTCoq bitvectors *)
+                      (* Some (existT _ (Sort_BitVec m1) (bv_rem bv1 bv2)) *)
+                      None
+                  | BVShl => Some (existT _ (Sort_BitVec m1) (bv_shl bv1 bv2))
+                  | BVShr => Some (existT _ (Sort_BitVec m1) (bv_shr bv1 bv2))
+                  end
+              | right _ => None
+              end
+          | _, _ => None
+          end
+      | Term_BVUlt t1 t2 =>
+          match interp_term t1, interp_term t2 with
+          | Some (existT _ (Sort_BitVec m1) bv1),
+            Some (existT _ (Sort_BitVec m2) bv2) =>
+              if (m1 =? m2)%N
+              then Some (existT _ Sort_Bool (bv2nat bv1 <=? bv2nat bv2))
+              else None
+          | _, _ => None
+          end
       end.
 
     Definition interp_formula (t:term) : bool :=
@@ -182,6 +330,7 @@ Section SMTLib.
       match s return interp_sort interp_sort_sym s with
       | Sort_Bool => true
       | Sort_Int => 0%Z
+      | Sort_BitVec m => zeros m
       | Sort_Uninterpreted sy => interp_sort_sym_def sy
       end.
 
