@@ -63,6 +63,11 @@ Section SMTLib.
   | Term_Geq : term -> term -> term
   | Term_Eq : term -> term -> term
   | Term_And : term -> term -> term
+  | Term_Or : term -> term -> term
+  | Term_Not : term -> term
+  | Term_ITE : term -> term -> term -> term
+  | Term_True : term
+  | Term_False : term
   | Term_BVLit : list bool -> term
   | Term_BVConcat : term -> term -> term
   | Term_BVExtract : nat -> nat -> term -> term
@@ -270,6 +275,26 @@ Section SMTLib.
               Some (existT _ Sort_Bool (b1 && b2)%bool)
           | _, _ => None
           end
+      | Term_Or t1 t2 =>
+          match interp_term t1, interp_term t2 with
+          | Some (existT _ Sort_Bool b1), Some (existT _ Sort_Bool b2) =>
+              Some (existT _ Sort_Bool (b1 || b2)%bool)
+          | _, _ => None
+          end
+      | Term_Not t =>
+          match interp_term t with
+          | Some (existT _ Sort_Bool b) =>
+              Some (existT _ Sort_Bool (negb b))
+          | _ => None
+          end
+      | Term_ITE t1 t2 t3 =>
+          match interp_term t1, interp_term t2, interp_term t3 with
+          | Some (existT _ Sort_Bool b1), Some v2, Some v3 =>
+              if b1 then Some v2 else Some v3
+          | _, _, _ => None
+          end
+      | Term_True => Some (existT _ Sort_Bool true)
+      | Term_False => Some (existT _ Sort_Bool false)
       | Term_BVLit bits =>
           Some (existT _ (Sort_BitVec (N_of_nat (length bits))) (of_bits bits))
       | Term_BVConcat t1 t2 =>
