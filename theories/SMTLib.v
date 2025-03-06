@@ -76,6 +76,9 @@ Section SMTLib.
   | Term_BVUlt : term -> term -> term
   .
 
+  Definition dec_sort (s1 s2 : sort) : { s1 = s2 } + { s1 <> s2 }.
+  Proof. repeat decide equality. Defined.
+
   (* To be able to interpret function symbol application, we introduce
      an informative cast between sorts
 
@@ -387,8 +390,95 @@ Section SMTLib.
       end.
   End Default.
 
+  Section Query.
+    Record query : Set :=
+      MkQuery
+        { declarations: list fun_sym;
+          assertions: list term;
+        }.
+
+    Record model :=
+      MkModel {
+        sorts: sort_sym -> Type;
+        funs: nat -> forall (dom:list sort) (codom:sort), interp_fun_type sorts dom codom;
+      }.
+
+    Import EqNotations.
+
+    Program Definition model_set_fun
+      (m : model)
+      (n : nat)
+      (dom : list sort)
+      (codom : sort)
+      (v : interp_fun_type (sorts m) dom codom) : model :=
+      {| sorts := sorts m;
+        funs := fun n' dom' codom' =>
+                  match n =? n', list_eq_dec dec_sort dom dom', dec_sort codom codom' with
+                  | true, left e1, left e2 => v
+                      (* let v' : interp_fun_type (sorts m) dom codom' := (rew e2 in v) in *)
+                      (* let v'' : interp_fun_type (sorts m) dom' codom' := (rew [ fun d => interp_fun_type (sorts m) d codom' ] e1 in v') in *)
+                      (* v'' *)
+                  | _, _, _ => funs m n' dom' codom'
+                  end
+      |}.
+
+    Hint Unfold model_set_fun : core.
+
+    Definition default_model :=
+      MkModel
+        (fun _ => unit)
+        (fix funs n dom codom {struct dom} :=
+           match dom, codom, n with
+           | [], Sort_Int, _ => 0%Z
+           | [], Sort_Bool, _ => false
+           | [], (Sort_BitVec n), _ => zeros n
+           | [], (Sort_Uninterpreted n), _ => tt
+           | (s :: ss), _, _ => (fun _ : interp_sort (fun _ => unit) s => funs n ss codom)
+           end
+        ).
+
+    Hint Unfold model_set_fun : core.
+
+    Definition term_satisfied_by (m: model) (t: term): Prop :=
+      interp_term (sorts m) (funs m) t = Some (existT _ Sort_Bool true).
+
+    Definition satisfied_by (m: model) (q: query): Prop :=
+      Forall (term_satisfied_by m) (assertions q).
+
+    Definition satisfiable (q: query) : Prop :=
+      exists m, satisfied_by m q.
+
+    Definition unsatisfiable (q: query) : Prop :=
+      forall m, ~ satisfied_by m q.
+
+    Definition valid (q: query) : Prop :=
+      forall m, satisfied_by m q.
+
+    Definition invalid (q: query) : Prop :=
+      exists m, ~ satisfied_by m q.
+
+    Lemma valid_satisfiable q :
+      valid q -> satisfiable q.
+    Proof.
+      unfold valid, satisfiable.
+      intros.
+      exists default_model.
+      auto.
+    Qed.
+
+    Lemma unsatisfiable_invalid q :
+      unsatisfiable q -> invalid q.
+    Proof.
+      unfold valid, satisfiable.
+      intros.
+      exists default_model.
+      auto.
+    Qed.
+  End Query.
 End SMTLib.
 
+Notation SAT := satisfiable.
+Notation UNSAT := unsatisfiable.
 
 (* Register constants for OCaml access *)
 Register Sort_Bool as SMTCoqAPI.SMTLib.Sort_Bool.
