@@ -391,11 +391,7 @@ Section SMTLib.
   End Default.
 
   Section Query.
-    Record query : Set :=
-      MkQuery
-        { declarations: list fun_sym;
-          assertions: list term;
-        }.
+    Definition query := list term.
 
     Record model :=
       MkModel {
@@ -443,7 +439,7 @@ Section SMTLib.
       interp_term (sorts m) (funs m) t = Some (existT _ Sort_Bool true).
 
     Definition satisfied_by (m: model) (q: query): Prop :=
-      Forall (term_satisfied_by m) (assertions q).
+      Forall (term_satisfied_by m) q.
 
     Definition satisfiable (q: query) : Prop :=
       exists m, satisfied_by m q.
