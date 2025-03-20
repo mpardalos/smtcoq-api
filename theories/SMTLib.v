@@ -25,7 +25,7 @@ Import ListNotations.
 Section SMTLib.
 
   (* Uninterpreted sorts *)
-  Local Notation sort_sym := nat.
+  Definition sort_sym := nat.
 
   Inductive sort : Set :=
   | Sort_Bool
@@ -39,7 +39,7 @@ Section SMTLib.
      - predicate symbols are function symbols of codomain Bool
      - variables are function symbols without arguments
    *)
-  Local Notation fun_sym := (nat * ((list sort) * sort))%type.
+  Definition fun_sym := (nat * ((list sort) * sort))%type.
 
   Variant BVUnaryOp : Set :=
     | BVNot
@@ -393,35 +393,35 @@ Section SMTLib.
   Section Query.
     Definition query := list term.
 
-    Record model :=
-      MkModel {
+    Record valuation :=
+      MkValuation {
         sorts: sort_sym -> Type;
         funs: nat -> forall (dom:list sort) (codom:sort), interp_fun_type sorts dom codom;
       }.
 
     Import EqNotations.
 
-    Program Definition model_set_fun
-      (m : model)
+    Program Definition valuation_set_fun
+      (ρ : valuation)
       (n : nat)
       (dom : list sort)
       (codom : sort)
-      (v : interp_fun_type (sorts m) dom codom) : model :=
-      {| sorts := sorts m;
+      (v : interp_fun_type (sorts ρ) dom codom) : valuation :=
+      {| sorts := sorts ρ;
         funs := fun n' dom' codom' =>
                   match n =? n', list_eq_dec dec_sort dom dom', dec_sort codom codom' with
                   | true, left e1, left e2 => v
                       (* let v' : interp_fun_type (sorts m) dom codom' := (rew e2 in v) in *)
                       (* let v'' : interp_fun_type (sorts m) dom' codom' := (rew [ fun d => interp_fun_type (sorts m) d codom' ] e1 in v') in *)
                       (* v'' *)
-                  | _, _, _ => funs m n' dom' codom'
+                  | _, _, _ => funs ρ n' dom' codom'
                   end
       |}.
 
-    Hint Unfold model_set_fun : core.
+    Hint Unfold valuation_set_fun : core.
 
-    Definition default_model :=
-      MkModel
+    Definition default_valuation :=
+      MkValuation
         (fun _ => unit)
         (fix funs n dom codom {struct dom} :=
            match dom, codom, n with
@@ -433,32 +433,30 @@ Section SMTLib.
            end
         ).
 
-    Hint Unfold model_set_fun : core.
+    Definition term_satisfied_by (ρ: valuation) (t: term) : Prop :=
+      interp_term (sorts ρ) (funs ρ) t = Some (existT _ Sort_Bool true).
 
-    Definition term_satisfied_by (m: model) (t: term): Prop :=
-      interp_term (sorts m) (funs m) t = Some (existT _ Sort_Bool true).
-
-    Definition satisfied_by (m: model) (q: query): Prop :=
-      Forall (term_satisfied_by m) q.
+    Definition satisfied_by (ρ: valuation) (q: query): Prop :=
+      Forall (term_satisfied_by ρ) q.
 
     Definition satisfiable (q: query) : Prop :=
-      exists m, satisfied_by m q.
+      exists ρ, satisfied_by ρ q.
 
     Definition unsatisfiable (q: query) : Prop :=
-      forall m, ~ satisfied_by m q.
+      forall ρ, ~ satisfied_by ρ q.
 
     Definition valid (q: query) : Prop :=
-      forall m, satisfied_by m q.
+      forall ρ, satisfied_by ρ q.
 
     Definition invalid (q: query) : Prop :=
-      exists m, ~ satisfied_by m q.
+      exists ρ, ~ satisfied_by ρ q.
 
     Lemma valid_satisfiable q :
       valid q -> satisfiable q.
     Proof.
       unfold valid, satisfiable.
       intros.
-      exists default_model.
+      exists default_valuation.
       auto.
     Qed.
 
@@ -467,7 +465,7 @@ Section SMTLib.
     Proof.
       unfold valid, satisfiable.
       intros.
-      exists default_model.
+      exists default_valuation.
       auto.
     Qed.
   End Query.
