@@ -5,6 +5,7 @@ src/META.coq-smtcoq-api
 
 theories/SMTCoqApi.v
 theories/SMTLib.v
+theories/SMTLibFacts.v
 
 src/api.ml
 src/api.mli
