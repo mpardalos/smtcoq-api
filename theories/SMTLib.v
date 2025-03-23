@@ -399,3 +399,14 @@ Register Term_Int as SMTCoqAPI.SMTLib.Term_Int.
 Register Term_Geq as SMTCoqAPI.SMTLib.Term_Geq.
 Register Term_Eq as SMTCoqAPI.SMTLib.Term_Eq.
 Register Term_And as SMTCoqAPI.SMTLib.Term_And.
+Register Term_Or as SMTCoqAPI.SMTLib.Term_Or.
+Register Term_Not as SMTCoqAPI.SMTLib.Term_Not.
+Register Term_ITE as SMTCoqAPI.SMTLib.Term_ITE.
+Register Term_True as SMTCoqAPI.SMTLib.Term_True.
+Register Term_False as SMTCoqAPI.SMTLib.Term_False.
+Register Term_BVLit as SMTCoqAPI.SMTLib.Term_BVLit.
+Register Term_BVConcat as SMTCoqAPI.SMTLib.Term_BVConcat.
+Register Term_BVExtract as SMTCoqAPI.SMTLib.Term_BVExtract.
+Register Term_BVUnaryOp as SMTCoqAPI.SMTLib.Term_BVUnaryOp.
+Register Term_BVBinOp as SMTCoqAPI.SMTLib.Term_BVBinOp.
+Register Term_BVUlt as SMTCoqAPI.SMTLib.Term_BVUlt.

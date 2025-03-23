@@ -17,6 +17,7 @@ module S = Smtcoq_plugin
 type sort =
   | Sort_Bool
   | Sort_Int
+  | Sort_BitVec of Constr.t
   | Sort_Uninterpreted of Constr.t
 
 type fun_sym = Constr.t * ((sort list) * sort)
@@ -42,7 +43,17 @@ let cTerm_Int = smtcoq_api_gc "Term_Int"
 let cTerm_Geq = smtcoq_api_gc "Term_Geq"
 let cTerm_Eq = smtcoq_api_gc "Term_Eq"
 let cTerm_And = smtcoq_api_gc "Term_And"
-
+(* let cTerm_Or = smtcoq_api_gc "Term_Or" *)
+(* let cTerm_Not = smtcoq_api_gc "Term_Not" *)
+(* let cTerm_ITE = smtcoq_api_gc "Term_ITE" *)
+(* let cTerm_True = smtcoq_api_gc "Term_True" *)
+(* let cTerm_False = smtcoq_api_gc "Term_False" *)
+(* let cTerm_BVLit = smtcoq_api_gc "Term_BVLit" *)
+(* let cTerm_BVConcat = smtcoq_api_gc "Term_BVConcat" *)
+(* let cTerm_BVExtract = smtcoq_api_gc "Term_BVExtract" *)
+(* let cTerm_BVUnaryOp = smtcoq_api_gc "Term_BVUnaryOp" *)
+(* let cTerm_BVBinOp = smtcoq_api_gc "Term_BVBinOp" *)
+(* let cTerm_BVUlt = smtcoq_api_gc "Term_BVUlt" *)
 
 (* Reification *)
 let rec reify_list l =
@@ -118,6 +129,7 @@ let rec reify (c:Constr.t) =
 let compile_sort rt = function
   | Sort_Bool -> S.SmtBtype.Tbool
   | Sort_Int -> S.SmtBtype.TZ
+  | Sort_BitVec w -> S.SmtBtype.TBV w (* How do I convert a Constr.t to an int whtih S.SmtBtype.TBV expects? *)
   | Sort_Uninterpreted c -> failwith "Not implemented yet" (* S.SmtBtype.declare rt c dummy_typ_compdec *)
 
 
