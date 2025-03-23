@@ -233,12 +233,10 @@ Qed.
 Lemma incompatible_reflect q1 q2 P1 P2 :
   smt_reflect q1 P1 ->
   smt_reflect q2 P2 ->
-  SAT q1 ->
-  SAT q2 ->
   UNSAT (q1 ++ q2) ->
   (forall ρ, ~ (P1 ρ /\ P2 ρ)).
 Proof.
-  intros Hq1P1 Hq2P2 [ρ1 Hsat1] [ρ2 Hsat2] Hunsat.
+  intros Hq1P1 Hq2P2 Hunsat.
   eapply unsat_negation.
   - eauto using concat_conj.
   - eauto.
