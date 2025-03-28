@@ -393,6 +393,7 @@ End SMTLib.
 (* Register constants for OCaml access *)
 Register Sort_Bool as SMTCoqAPI.SMTLib.Sort_Bool.
 Register Sort_Int as SMTCoqAPI.SMTLib.Sort_Int.
+Register Sort_BitVec as SMTCoqAPI.SMTLib.Sort_BitVec.
 Register Sort_Uninterpreted as SMTCoqAPI.SMTLib.Sort_Uninterpreted.
 Register Term_Fun as SMTCoqAPI.SMTLib.Term_Fun.
 Register Term_Int as SMTCoqAPI.SMTLib.Term_Int.
