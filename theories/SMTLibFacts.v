@@ -3,9 +3,9 @@ Import List.ListNotations.
 
 Require Import SMTLib.
 
-Fixpoint term_domain (t : SMTLib.term) : list fun_sym :=
+Fixpoint term_domain (t : SMTLib.term) : list const_sym :=
   match t with
-  | SMTLib.Term_Fun sym args => sym :: (List.concat (List.map term_domain args))
+  | SMTLib.Term_Const sym => [sym]
   | SMTLib.Term_Int _ => []
   | SMTLib.Term_Geq l r => (term_domain l) ++ (term_domain r)
   | SMTLib.Term_Eq l r => (term_domain l) ++ (term_domain r)
@@ -24,7 +24,7 @@ Fixpoint term_domain (t : SMTLib.term) : list fun_sym :=
   end
 .
 
-Definition domain (q : query) : list fun_sym := List.concat (List.map term_domain q).
+Definition domain (q : query) : list const_sym := List.concat (List.map term_domain q).
 
 Definition list_disjoint {A} (l1 l2 : list A) :=
   forall x, (List.In x l1 -> ~ List.In x l2) /\ (List.In x l2 -> ~ List.In x l1).
@@ -128,11 +128,9 @@ Proof.
     contradiction.
 Qed.
 
-Definition a : fun_sym := (0, ([], Sort_Bool)).
-
-Definition Qa := [ Term_Fun a [] ].
-Definition a_is_true := (fun ρ => funs ρ 0 [] Sort_Bool = true).
-Definition a_is_false := (fun ρ => funs ρ 0 [] Sort_Bool = false).
+Definition Qa := [ Term_Const 0 ].
+Definition a_is_true := (fun ρ => ρ 0 = Some (Value_Bool true)).
+Definition a_is_false := (fun ρ => ρ 0 = Some (Value_Bool false)).
 
 Lemma Qa_prop : smt_reflect Qa a_is_true.
 Proof.
@@ -147,22 +145,23 @@ Proof.
     reflexivity.
 Qed.
 
-Definition Qnota := [ Term_Not (Term_Fun a []) ].
+Definition Qnota := [ Term_Not (Term_Const 0) ].
 Lemma Qnota_prop : smt_reflect Qnota a_is_false.
 Proof.
   unfold Qnota, a_is_false.
   split; intros.
   - inversion H; subst; clear H.
     inversion H2; subst; clear H2.
-    simpl in H.
-    assert (negb (funs ρ 0 [] Sort_Bool) = true) by admit. (* dependent type issues *)
-    symmetry in H0; apply Bool.negb_sym in H0; simpl in H0.
-    assumption.
+    destruct (ρ 0); try discriminate.
+    destruct v; try discriminate.
+    inversion H0.
+    symmetry in H1. apply Bool.negb_sym in H1. simpl in H1.
+    subst. reflexivity.
   - repeat constructor.
     unfold term_satisfied_by; simpl.
     rewrite H; clear H.
     reflexivity.
-Admitted.
+Qed.
 
 Lemma Qa_Qnota_concat : smt_reflect (Qa ++ Qnota) (fun ρ => a_is_true ρ /\ a_is_false ρ).
 Proof. auto using concat_conj, Qa_prop, Qnota_prop. Qed.

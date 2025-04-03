@@ -39,7 +39,7 @@ Section SMTLib.
      - predicate symbols are function symbols of codomain Bool
      - variables are function symbols without arguments
    *)
-  Definition fun_sym := (nat * ((list sort) * sort))%type.
+  Definition const_sym := nat.
 
   Variant BVUnaryOp : Set :=
     | BVNot
@@ -58,7 +58,7 @@ Section SMTLib.
   .
 
   Inductive term : Set :=
-  | Term_Fun : fun_sym -> list term -> term
+  | Term_Const : const_sym -> term
   | Term_Int : Z -> term
   | Term_Geq : term -> term -> term
   | Term_Eq : term -> term -> term
@@ -171,45 +171,11 @@ Section SMTLib.
   (* Interpretation *)
   Section Interpretation.
 
-    (* Interpretation of sorts *)
-    Variable interp_sort_sym : sort_sym -> Type.
-
-    Definition interp_sort (s:sort) : Type :=
-      match s with
-      | Sort_Bool => bool
-      | Sort_Int => Z
-      | Sort_BitVec m => bitvector m
-      | Sort_Uninterpreted sy => interp_sort_sym sy
-      end.
-
-    (* Interpretation of function types *)
-    Fixpoint interp_fun_type (dom:list sort) (codom:sort) : Type :=
-      match dom with
-      | nil => interp_sort codom
-      | s::dom => (interp_sort s) -> (interp_fun_type dom codom)
-      end.
-
-    (* Applying function symbols *)
-    Fixpoint apply_fun (dom:list sort) (codom:sort) :
-      (interp_fun_type dom codom) ->
-      (list (option {A:sort & interp_sort A})) ->
-      option (interp_sort codom) :=
-      match dom return
-            (interp_fun_type dom codom) ->
-            (list (option {A:sort & interp_sort A})) ->
-            option (interp_sort codom)
-      with
-      | nil => fun f _ => Some f
-      | s::dom => fun f arg =>
-                  match arg with
-                  | (Some (existT _ s' a))::arg =>
-                      match cast s' s with
-                      | Some k => apply_fun dom codom (f (k _ a)) arg
-                      | None => None
-                      end
-                  | _ => None
-                  end
-      end.
+    Variant value : Type :=
+      | Value_Bool (b : bool)
+      | Value_Int (i : Z)
+      | Value_BitVec (w : N) (bv : bitvector w)
+    .
 
     (* TODO: This is probably wrong. *)
     Program Fixpoint bv2nat {m} (bv : bitvector m) {measure (nat_of_N m)} : nat :=
@@ -247,94 +213,85 @@ Section SMTLib.
     Qed.
 
     (* Interpretation of terms *)
-    Variable interp_fun_sym :
-      nat -> forall (dom:list sort) (codom:sort), interp_fun_type dom codom.
+    Variable interp_const_sym : nat -> option value.
 
-    Fixpoint interp_term (t:term) : option {A : sort & interp_sort A} :=
+    Fixpoint interp_term (t:term) : option value :=
       match t with
-      | Term_Fun (n, (dom, codom)) arg =>
-          match apply_fun dom codom (interp_fun_sym n dom codom)
-                  (List.map interp_term arg)
-          with
-          | Some i => Some (existT _ codom i)
-          | None => None
-          end
-      | Term_Int z => Some (existT _ Sort_Int z)
+      (* TODO: uninterpreted functions *)
+      | Term_Const n => interp_const_sym n
+      | Term_Int z => Some (Value_Int z)
       | Term_Geq t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ Sort_Int z1), Some (existT _ Sort_Int z2) =>
-              Some (existT _ Sort_Bool (z1 >=? z2)%Z)
+          | Some (Value_Int z1), Some (Value_Int z2) =>
+              Some (Value_Bool (z1 >=? z2)%Z)
           | _, _ => None
           end
       | Term_Eq t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ Sort_Int z1), Some (existT _ Sort_Int z2) =>
-              Some (existT _ Sort_Bool (z1 =? z2)%Z)
+          | Some (Value_Int z1), Some (Value_Int z2) =>
+              Some (Value_Bool (z1 =? z2)%Z)
           | _, _ => None
           end
       | Term_And t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ Sort_Bool b1), Some (existT _ Sort_Bool b2) =>
-              Some (existT _ Sort_Bool (b1 && b2)%bool)
+          | Some (Value_Bool b1), Some (Value_Bool b2) =>
+              Some (Value_Bool (b1 && b2)%bool)
           | _, _ => None
           end
       | Term_Or t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ Sort_Bool b1), Some (existT _ Sort_Bool b2) =>
-              Some (existT _ Sort_Bool (b1 || b2)%bool)
+          | Some (Value_Bool b1), Some (Value_Bool b2) =>
+              Some (Value_Bool (b1 || b2)%bool)
           | _, _ => None
           end
       | Term_Not t =>
           match interp_term t with
-          | Some (existT _ Sort_Bool b) =>
-              Some (existT _ Sort_Bool (negb b))
+          | Some (Value_Bool b) => Some (Value_Bool (negb b))
           | _ => None
           end
       | Term_ITE t1 t2 t3 =>
           match interp_term t1, interp_term t2, interp_term t3 with
-          | Some (existT _ Sort_Bool b1), Some v2, Some v3 =>
+          | Some (Value_Bool b1), Some v2, Some v3 =>
               if b1 then Some v2 else Some v3
           | _, _, _ => None
           end
-      | Term_True => Some (existT _ Sort_Bool true)
-      | Term_False => Some (existT _ Sort_Bool false)
+      | Term_True => Some (Value_Bool true)
+      | Term_False => Some (Value_Bool false)
       | Term_BVLit bits =>
-          Some (existT _ (Sort_BitVec (N_of_nat (length bits))) (of_bits bits))
+          Some (Value_BitVec (N_of_nat (length bits)) (of_bits bits))
       | Term_BVConcat t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ (Sort_BitVec m1) bv1), Some (existT _ (Sort_BitVec m2) bv2) =>
-              Some (existT _ (Sort_BitVec (m1 + m2)) (bv_concat bv1 bv2))
+          | Some (Value_BitVec m1 bv1), Some (Value_BitVec m2 bv2) =>
+              Some (Value_BitVec (m1 + m2) (bv_concat bv1 bv2))
           | _, _ => None
           end
       | Term_BVExtract lo hi t =>
           match interp_term t with
-          | Some (existT _ (Sort_BitVec m) bv) =>
-              Some (existT _
-                      (Sort_BitVec (N_of_nat (hi - lo + 1)))
-                      (bv_extr (N_of_nat lo) _ bv))
+          | Some (Value_BitVec m bv) =>
+              Some (Value_BitVec (N_of_nat (hi - lo + 1)) (bv_extr (N_of_nat lo) _ bv))
           | _ => None
           end
       | Term_BVUnaryOp op t =>
           match interp_term t with
-          | Some (existT _ (Sort_BitVec m) bv) =>
+          | Some (Value_BitVec m bv) =>
               match op with
-              | BVNot => Some (existT _ (Sort_BitVec m) (bv_not bv))
-              | BVNeg => Some (existT _ (Sort_BitVec m) (bv_neg bv))
+              | BVNot => Some (Value_BitVec m (bv_not bv))
+              | BVNeg => Some (Value_BitVec m (bv_neg bv))
               end
           | _ => None
           end
       | Term_BVBinOp binop t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ (Sort_BitVec m1) bv1),
-            Some (existT _ (Sort_BitVec m2) bv2_2) =>
+          | Some (Value_BitVec m1 bv1),
+            Some (Value_BitVec m2 bv2_2) =>
               match N.eq_dec m2 m1 with
               | left e =>
                   let bv2 : bitvector m1 := eq_rect m2 bitvector bv2_2 m1 e in
                   match binop with
-                  | BVAnd => Some (existT _ (Sort_BitVec m1) (bv_and bv1 bv2))
-                  | BVOr => Some (existT _ (Sort_BitVec m1) (bv_or bv1 bv2))
-                  | BVAdd => Some (existT _ (Sort_BitVec m1) (bv_add bv1 bv2))
-                  | BVMul => Some (existT _ (Sort_BitVec m1) (bv_mult bv1 bv2))
+                  | BVAnd => Some (Value_BitVec m1 (bv_and bv1 bv2))
+                  | BVOr =>  Some (Value_BitVec m1 (bv_or bv1 bv2))
+                  | BVAdd => Some (Value_BitVec m1 (bv_add bv1 bv2))
+                  | BVMul => Some (Value_BitVec m1 (bv_mult bv1 bv2))
                   | BVUDiv =>
                       (* Divide does not exist in SMTCoq bitvectors *)
                       (* Some (existT _ (Sort_BitVec m1) (bv_udiv bv1 bv2)) *)
@@ -343,8 +300,8 @@ Section SMTLib.
                       (* Divide does not exist in SMTCoq bitvectors *)
                       (* Some (existT _ (Sort_BitVec m1) (bv_rem bv1 bv2)) *)
                       None
-                  | BVShl => Some (existT _ (Sort_BitVec m1) (bv_shl bv1 bv2))
-                  | BVShr => Some (existT _ (Sort_BitVec m1) (bv_shr bv1 bv2))
+                  | BVShl => Some (Value_BitVec m1 (bv_shl bv1 bv2))
+                  | BVShr => Some (Value_BitVec m1 (bv_shr bv1 bv2))
                   end
               | right _ => None
               end
@@ -352,10 +309,10 @@ Section SMTLib.
           end
       | Term_BVUlt t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (existT _ (Sort_BitVec m1) bv1),
-            Some (existT _ (Sort_BitVec m2) bv2) =>
+          | Some (Value_BitVec m1 bv1),
+            Some (Value_BitVec m2 bv2) =>
               if (m1 =? m2)%N
-              then Some (existT _ Sort_Bool (bv2nat bv1 <=? bv2nat bv2))
+              then Some (Value_Bool (bv2nat bv1 <=? bv2nat bv2))
               else None
           | _, _ => None
           end
@@ -363,78 +320,25 @@ Section SMTLib.
 
     Definition interp_formula (t:term) : bool :=
       match interp_term t with
-      | Some (existT _ Sort_Bool b) => b
+      | Some (Value_Bool b) => b
       | _ => true
       end.
 
   End Interpretation.
-
-  (* Default values for interpreted sorts *)
-  Section Default.
-    Variable interp_sort_sym : sort_sym -> Type.
-    Variable interp_sort_sym_def : forall (sy:sort_sym), interp_sort_sym sy.
-
-    Definition interp_sort_def (s:sort) : interp_sort interp_sort_sym s :=
-      match s return interp_sort interp_sort_sym s with
-      | Sort_Bool => true
-      | Sort_Int => 0%Z
-      | Sort_BitVec m => zeros m
-      | Sort_Uninterpreted sy => interp_sort_sym_def sy
-      end.
-
-    Fixpoint interp_fun_type_def (dom:list sort) (codom:sort) :
-      interp_fun_type interp_sort_sym dom codom :=
-      match dom return interp_fun_type interp_sort_sym dom codom with
-      | nil => interp_sort_def codom
-      | _::dom => fun _ => interp_fun_type_def dom codom
-      end.
-  End Default.
-
   Section Query.
     Definition query := list term.
 
-    Record valuation :=
-      MkValuation {
-        sorts: sort_sym -> Type;
-        funs: nat -> forall (dom:list sort) (codom:sort), interp_fun_type sorts dom codom;
-      }.
+    Definition valuation := nat -> option value.
 
-    Import EqNotations.
-
-    Program Definition valuation_set_fun
-      (ρ : valuation)
-      (n : nat)
-      (dom : list sort)
-      (codom : sort)
-      (v : interp_fun_type (sorts ρ) dom codom) : valuation :=
-      {| sorts := sorts ρ;
-        funs := fun n' dom' codom' =>
-                  match n =? n', list_eq_dec dec_sort dom dom', dec_sort codom codom' with
-                  | true, left e1, left e2 => v
-                      (* let v' : interp_fun_type (sorts m) dom codom' := (rew e2 in v) in *)
-                      (* let v'' : interp_fun_type (sorts m) dom' codom' := (rew [ fun d => interp_fun_type (sorts m) d codom' ] e1 in v') in *)
-                      (* v'' *)
-                  | _, _, _ => funs ρ n' dom' codom'
-                  end
-      |}.
+    Definition valuation_set_fun (ρ : valuation) (n : nat) (v : value) : valuation :=
+      fun n' => if n =? n' then Some v else ρ n.
 
     Hint Unfold valuation_set_fun : core.
 
-    Definition default_valuation :=
-      MkValuation
-        (fun _ => unit)
-        (fix funs n dom codom {struct dom} :=
-           match dom, codom, n with
-           | [], Sort_Int, _ => 0%Z
-           | [], Sort_Bool, _ => false
-           | [], (Sort_BitVec n), _ => zeros n
-           | [], (Sort_Uninterpreted n), _ => tt
-           | (s :: ss), _, _ => (fun _ : interp_sort (fun _ => unit) s => funs n ss codom)
-           end
-        ).
+    Definition default_valuation : valuation := fun _ => None.
 
     Definition term_satisfied_by (ρ: valuation) (t: term) : Prop :=
-      interp_term (sorts ρ) (funs ρ) t = Some (existT _ Sort_Bool true).
+      interp_term ρ t = Some (Value_Bool true).
 
     Definition satisfied_by (ρ: valuation) (q: query): Prop :=
       Forall (term_satisfied_by ρ) q.
@@ -478,7 +382,7 @@ Notation UNSAT := unsatisfiable.
 Register Sort_Bool as SMTCoqAPI.SMTLib.Sort_Bool.
 Register Sort_Int as SMTCoqAPI.SMTLib.Sort_Int.
 Register Sort_Uninterpreted as SMTCoqAPI.SMTLib.Sort_Uninterpreted.
-Register Term_Fun as SMTCoqAPI.SMTLib.Term_Fun.
+Register Term_Const as SMTCoqAPI.SMTLib.Term_Fun.
 Register Term_Int as SMTCoqAPI.SMTLib.Term_Int.
 Register Term_Geq as SMTCoqAPI.SMTLib.Term_Geq.
 Register Term_Eq as SMTCoqAPI.SMTLib.Term_Eq.
