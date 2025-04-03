@@ -395,6 +395,19 @@ Register Sort_Bool as SMTCoqAPI.SMTLib.Sort_Bool.
 Register Sort_Int as SMTCoqAPI.SMTLib.Sort_Int.
 Register Sort_BitVec as SMTCoqAPI.SMTLib.Sort_BitVec.
 Register Sort_Uninterpreted as SMTCoqAPI.SMTLib.Sort_Uninterpreted.
+
+Register BVNot as SMTCoqAPI.SMTLib.BVNot.
+Register BVNeg as SMTCoqAPI.SMTLib.BVNeg.
+
+Register BVAnd as SMTCoqAPI.SMTLib.BVAnd.
+Register BVOr as SMTCoqAPI.SMTLib.BVOr.
+Register BVAdd as SMTCoqAPI.SMTLib.BVAdd.
+Register BVMul as SMTCoqAPI.SMTLib.BVMul.
+Register BVUDiv as SMTCoqAPI.SMTLib.BVUDiv.
+Register BVURem as SMTCoqAPI.SMTLib.BVURem.
+Register BVShl as SMTCoqAPI.SMTLib.BVShl.
+Register BVShr as SMTCoqAPI.SMTLib.BVShr.
+
 Register Term_Fun as SMTCoqAPI.SMTLib.Term_Fun.
 Register Term_Int as SMTCoqAPI.SMTLib.Term_Int.
 Register Term_Geq as SMTCoqAPI.SMTLib.Term_Geq.
