@@ -17,7 +17,7 @@ module S = Smtcoq_plugin
 type sort =
   | Sort_Bool
   | Sort_Int
-  | Sort_BitVec of Constr.t
+  | Sort_BitVec of int
   | Sort_Uninterpreted of Constr.t
 
 type fun_sym = Constr.t * ((sort list) * sort)
@@ -28,6 +28,7 @@ type term =
   | Term_Geq of term * term
   | Term_Eq of term * term
   | Term_And of term * term
+  | Term_BVLit of bool list
 
 
 (* Simple SMT-LIB syntax, in Coq *)
@@ -37,6 +38,7 @@ let smtcoq_api_prefix = "SMTCoqAPI.SMTLib"
 let smtcoq_api_gc = gc smtcoq_api_prefix
 let cSort_Bool = smtcoq_api_gc "Sort_Bool"
 let cSort_Int = smtcoq_api_gc "Sort_Int"
+let cSort_BitVec = smtcoq_api_gc "Sort_BitVec"
 let cSort_Uninterpreted = smtcoq_api_gc "Sort_Uninterpreted"
 let cTerm_Fun = smtcoq_api_gc "Term_Fun"
 let cTerm_Int = smtcoq_api_gc "Term_Int"
@@ -48,7 +50,7 @@ let cTerm_And = smtcoq_api_gc "Term_And"
 (* let cTerm_ITE = smtcoq_api_gc "Term_ITE" *)
 (* let cTerm_True = smtcoq_api_gc "Term_True" *)
 (* let cTerm_False = smtcoq_api_gc "Term_False" *)
-(* let cTerm_BVLit = smtcoq_api_gc "Term_BVLit" *)
+let cTerm_BVLit = smtcoq_api_gc "Term_BVLit"
 (* let cTerm_BVConcat = smtcoq_api_gc "Term_BVConcat" *)
 (* let cTerm_BVExtract = smtcoq_api_gc "Term_BVExtract" *)
 (* let cTerm_BVUnaryOp = smtcoq_api_gc "Term_BVUnaryOp" *)
@@ -73,7 +75,11 @@ let reify_sort (c:Constr.t) =
     Sort_Bool
   else if c = Lazy.force cSort_Int then
     Sort_Int
-  else if c = Lazy.force cSort_Uninterpreted then (
+  else if c = Lazy.force cSort_BitVec then (
+    assert (Array.length args = 1);
+    let n = S.CoqTerms.mk_N args.(0) in
+    Sort_BitVec n
+  ) else if c = Lazy.force cSort_Uninterpreted then (
     assert (Array.length args = 1);
     let num = args.(0) in
     Sort_Uninterpreted num
@@ -120,6 +126,10 @@ let rec reify (c:Constr.t) =
     let t1 = args.(0) in
     let t2 = args.(1) in
     Term_And (reify t1, reify t2)
+  ) else if c = Lazy.force cTerm_BVLit then (
+    let l = reify_list args.(0) in
+    let l' = List.map S.CoqTerms.mk_bool l in
+    Term_BVLit l'
   ) else assert false
 
 
@@ -202,6 +212,8 @@ let rec compile rt ro rf ra = function
      let t1 = get_form rf (compile rt ro rf ra t1) in
      let t2 = get_form rf (compile rt ro rf ra t2) in
      Form (S.SmtAtom.Form.get rf (S.SmtForm.Fapp (S.SmtForm.Fand, [|t1; t2|])))
+  | Term_BVLit l ->
+     Atom (S.SmtAtom.Atom.get ra (S.SmtAtom.Acop (S.SmtAtom.CO_BV l)))
 
 let compile rt ro rf ra c = get_form rf (compile rt ro rf ra c)
 
