@@ -16,7 +16,9 @@ Require Import SMTCoq.SMTCoq.
 Require Import SMTCoq.bva.BVList.
 Import BITVECTOR_LIST.
 Require Import ZArith.
+Require Import Coq.Program.Equality.
 
+Import EqNotations.
 Import ListNotations.
 
 
@@ -177,6 +179,41 @@ Section SMTLib.
       | Value_BitVec (w : N) (bv : bitvector w)
     .
 
+    Definition value_eqb (v1 v2 : value) : bool :=
+      match v1, v2 with
+      | Value_Bool b1, Value_Bool b2 => Bool.eqb b1 b2
+      | Value_Int z1, Value_Int z2 => Z.eqb z1 z2
+      | Value_BitVec w1 bv1, Value_BitVec w2 bv2 =>
+          match N.eq_dec w1 w2 with
+          | left eq => bv_eq bv1 (rew <- eq in bv2)
+          | right _ => false
+          end
+      | _, _ => false
+      end.
+
+    Lemma value_eqb_eq v1 v2 : value_eqb v1 v2 = true <-> v1 = v2.
+    Proof.
+      split; intros H.
+      - destruct v1, v2; simpl in *; try discriminate.
+        + rewrite Bool.eqb_true_iff in H. subst.
+          reflexivity.
+        + rewrite Z.eqb_eq in H. subst.
+          reflexivity.
+        + destruct (N.eq_dec w w0); try discriminate.
+          subst.
+          replace (rew <- [bitvector] eq_refl in bv1) with bv1 in H by reflexivity.
+          apply bv_eq_reflect in H. subst.
+          reflexivity.
+      - subst.
+        destruct v2; simpl.
+        + rewrite Bool.eqb_true_iff. reflexivity.
+        + rewrite Z.eqb_eq. reflexivity.
+        + destruct (N.eq_dec w w); try contradiction.
+          dependent destruction e.
+          replace (rew <- [bitvector] eq_refl in bv0) with bv0 by reflexivity.
+          apply bv_eq_refl.
+    Qed.
+          
     (* TODO: This is probably wrong. *)
     Program Fixpoint bv2nat {m} (bv : bitvector m) {measure (nat_of_N m)} : nat :=
       match bits bv with
@@ -228,8 +265,8 @@ Section SMTLib.
           end
       | Term_Eq t1 t2 =>
           match interp_term t1, interp_term t2 with
-          | Some (Value_Int z1), Some (Value_Int z2) =>
-              Some (Value_Bool (z1 =? z2)%Z)
+          | Some v1, Some v2 =>
+              Some (Value_Bool (value_eqb v1 v2))
           | _, _ => None
           end
       | Term_And t1 t2 =>
