@@ -213,6 +213,9 @@ Section SMTLib.
           replace (rew <- [bitvector] eq_refl in bv0) with bv0 by reflexivity.
           apply bv_eq_refl.
     Qed.
+
+    Lemma value_eqb_refl v : value_eqb v v = true.
+    Proof. apply value_eqb_eq. reflexivity. Qed.
           
     (* TODO: This is probably wrong. *)
     Program Fixpoint bv2nat {m} (bv : bitvector m) {measure (nat_of_N m)} : nat :=
