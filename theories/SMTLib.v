@@ -59,7 +59,7 @@ Section SMTLib.
     | BVShr
   .
 
-  Inductive term : Set :=
+  Inductive term : Type :=
   | Term_Const : const_sym -> term
   | Term_Int : Z -> term
   | Term_Geq : term -> term -> term
@@ -70,7 +70,7 @@ Section SMTLib.
   | Term_ITE : term -> term -> term -> term
   | Term_True : term
   | Term_False : term
-  | Term_BVLit : list bool -> term
+  | Term_BVLit (w: N) : bitvector w -> term
   | Term_BVConcat : term -> term -> term
   | Term_BVExtract : nat -> nat -> term -> term
   | Term_BVUnaryOp : BVUnaryOp -> term -> term
@@ -297,8 +297,8 @@ Section SMTLib.
           end
       | Term_True => Some (Value_Bool true)
       | Term_False => Some (Value_Bool false)
-      | Term_BVLit bits =>
-          Some (Value_BitVec (N_of_nat (length bits)) (of_bits bits))
+      | Term_BVLit w bv =>
+          Some (Value_BitVec w bv)
       | Term_BVConcat t1 t2 =>
           match interp_term t1, interp_term t2 with
           | Some (Value_BitVec m1 bv1), Some (Value_BitVec m2 bv2) =>
