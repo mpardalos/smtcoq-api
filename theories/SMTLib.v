@@ -305,10 +305,12 @@ Section SMTLib.
               Some (Value_BitVec (m1 + m2) (bv_concat bv1 bv2))
           | _, _ => None
           end
-      | Term_BVExtract lo hi t =>
+      | Term_BVExtract hi lo t =>
           match interp_term t with
           | Some (Value_BitVec m bv) =>
-              Some (Value_BitVec (N_of_nat (hi - lo + 1)) (bv_extr (N_of_nat lo) _ bv))
+              if (lo <=? hi)
+              then Some (Value_BitVec (N_of_nat (hi - lo + 1)) (bv_extr (N_of_nat lo) _ bv))
+              else None
           | _ => None
           end
       | Term_BVUnaryOp op t =>
