@@ -368,7 +368,43 @@ Section SMTLib.
 
   End Interpretation.
   Section Query.
-    Definition query := list term.
+    Fixpoint term_domain (t : SMTLib.term) : list const_sym :=
+      match t with
+      | SMTLib.Term_Const sym => [sym]
+      | SMTLib.Term_Int _ => []
+      | SMTLib.Term_Geq l r => term_domain l ++ term_domain r
+      | SMTLib.Term_Eq l r => term_domain l ++ term_domain r
+      | SMTLib.Term_And l r => term_domain l ++ term_domain r
+      | SMTLib.Term_Or l r => term_domain l ++ term_domain r
+      | SMTLib.Term_Not e => term_domain e
+      | SMTLib.Term_ITE c t f => term_domain c ++ term_domain t ++ term_domain f
+      | SMTLib.Term_True => []
+      | SMTLib.Term_False => []
+      | SMTLib.Term_BVLit _ _ => []
+      | SMTLib.Term_BVConcat l r => term_domain l ++ term_domain r
+      | SMTLib.Term_BVExtract _ _ e => term_domain e
+      | SMTLib.Term_BVUnaryOp _ e => term_domain e
+      | SMTLib.Term_BVBinOp _ l r => term_domain l ++ term_domain r
+      | SMTLib.Term_BVUlt l r => term_domain l ++ term_domain r
+      end
+    .
+
+    Definition lst_domain (q : list term) : list const_sym := List.concat (List.map term_domain q).
+
+    Definition declaration := (nat * sort)%type.
+
+    Record query :=
+      MkQuery
+        {
+          declarations : list declaration;
+          assertions : list term;
+          (* All constants used have been declared *)
+          wf : Forall
+                 (fun n => exists s, In (n, s) declarations)
+                 (lst_domain assertions)
+        }.
+
+    Definition domain (q : query) : list const_sym := lst_domain (assertions q).
 
     Definition valuation := nat -> option value.
 
@@ -379,11 +415,18 @@ Section SMTLib.
 
     Definition default_valuation : valuation := fun _ => None.
 
+    Inductive value_has_sort : value -> sort -> Prop :=
+    | value_has_sort_Bool b : value_has_sort (Value_Bool b) Sort_Bool
+    | value_has_sort_Int i : value_has_sort (Value_Int i) Sort_Int
+    | value_has_sort_BitVec w bv : value_has_sort (Value_BitVec w bv) (Sort_BitVec w)
+    .
+
     Definition term_satisfied_by (ρ: valuation) (t: term) : Prop :=
       interp_term ρ t = Some (Value_Bool true).
 
     Definition satisfied_by (ρ: valuation) (q: query): Prop :=
-      Forall (term_satisfied_by ρ) q.
+      Forall (fun '(n, s) => exists v, ρ n = Some v /\ value_has_sort v s) (declarations q)
+      /\ Forall (term_satisfied_by ρ) (assertions q).
 
     Definition satisfiable (q: query) : Prop :=
       exists ρ, satisfied_by ρ q.
